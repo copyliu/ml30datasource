@@ -30,12 +30,12 @@ char far       *scr;
 char far       *mode;
 unsigned char far       *drv_type = (unsigned char far *) 0x4000f0;
 unsigned char far       *drv_num = (unsigned char far *) 0x4000f1;
-unsigned int far       *htype = (unsigned int far *) 0x4000f6;
+unsigned char far       *htype = (unsigned char far *) 0x4000f6;
 unsigned char far       *data_start = (unsigned char far *) 0x4000fc;
 unsigned char far       *data_end = (unsigned char far *) 0x4000fd;
 unsigned char far       *tsr = (unsigned char far *) 0x4000ff;
-unsigned int far * lonsd_add = (unsigned int far *) 0x4000f8;
-unsigned int far * lonsd_ptr = (unsigned int far *) 0x4000fc;
+unsigned int far * lonsd_seg = (unsigned int far *) 0x4000f8;
+unsigned int far * lonsd_pad = (unsigned int far *) 0x4000fa;
 unsigned char far *hjzb = (unsigned char far *) 0x4000fe;
 
 void interrupt (*oldport1isr)();
@@ -80,7 +80,7 @@ int recvdata(){
 	char far * londadd;
 	int i=0;
 	char data[88];
-	londadd =(void far *) (*lonsd_add << 16 | *lonsd_ptr);
+	londadd =(char far *) (MK_FP(*lonsd_seg , *lonsd_pad));
 	while (i < 88){
 		data[i] = buffer[bufferout];
 		bufferout++;
@@ -90,6 +90,14 @@ int recvdata(){
 
 	if (londadd){
 		memcpy(londadd+*data_start*88, data,88);
+		outportb(PORT1,*data_start);
+		outportb(PORT1,*data_end);
+		/*geninterrupt(0x61);*/
+	}
+	else{
+
+
+
 	}
 	*data_start++;
 	if (*data_start == 255) {
@@ -113,7 +121,7 @@ void main(void)
 	*drv_num="00000";*/
 	strcpy(*drv_num, "00000");
 	/*strcpy(*htype, '\x01\x00');*/
-	*htype = 1 << 8;
+	*htype = 3;
 	*data_start = 0;
 	*data_end = 0;
 	*tsr = 0;
@@ -162,7 +170,7 @@ void main(void)
 	/* COM4 (IRQ3) - 0xF7  */
 
 	outportb(PORT1 + 1, 0x01);  /* Interrupt when data received */
-	keep(0,2000);
+	keep(0,4000);
 
 
 	/*
