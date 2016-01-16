@@ -1,5 +1,5 @@
-
-
+/* QianLong (lonsd) Hello World Driver.*/
+/* will copy serial data to lonsd data memory if lonsd started. */
 #include <dos.h>
 #include <stdio.h>
 #include <conio.h>
@@ -13,34 +13,28 @@
   /* COM3 0x3E8			       */
   /* COM4 0x2E8			       */
 
+/*serial buffer*/
+int bufferin = 0; 
+int bufferout = 0;
+char buffer[1025]; 
 
-int bufferin=0;
-int bufferout=0;
-char buffer[1025];
-
-
+/*lonsd define*/
+unsigned char far       *drv_type = (unsigned char far *) MK_FP(0x40, 0xf0); /*not 0*/
+unsigned char far       *drv_num = (unsigned char far *)MK_FP(0x40, 0xf1); /*5 byte string*/
+unsigned char far       *htype = (unsigned char far *)MK_FP(0x40, 0xf6); /*1 for SHASE, 2 for SZNSE, 3 for all*/
+unsigned short far * lonsd_seg = (unsigned short far *)MK_FP(0x40, 0xf8); /*lonsd data segment*/
+unsigned short far * lonsd_off = (unsigned short far *)MK_FP(0x40, 0xfa);/*lonsd data offset*/
+unsigned char far       *data_start = (unsigned char far *)MK_FP(0x40, 0xfc); /*recv data buffer in ptr*/
+unsigned char far       *data_end = (unsigned char far *)MK_FP(0x40, 0xfd); /*recv data buffer out ptr*/
+unsigned char far *hjzb = (unsigned char far *)MK_FP(0x40, 0xfe); /*reserved , 0xff*/
+unsigned char far       *tsr = (unsigned char far *)MK_FP(0x40, 0xff); /*0xaa for tst mark*/
 
 void interrupt (*oldport1isr)();
 
 void interrupt PORT1INT()  /* Interrupt Service Routine (ISR) for PORT1 */
 
 {
-
-
-	char ch;
-
-	char far       *scr;
-	char far       *mode;
-	unsigned char far       *drv_type = (unsigned char far *) MK_FP(0x40, 0xf0);
-	unsigned char far       *drv_num = (unsigned char far *)MK_FP(0x40, 0xf1);
-	unsigned char far       *htype = (unsigned char far *)MK_FP(0x40, 0xf6);
-	unsigned short far * lonsd_seg = (unsigned short far *)MK_FP(0x40, 0xf8);
-	unsigned short far * lonsd_pad = (unsigned short far *)MK_FP(0x40, 0xfa);
-	unsigned char far       *data_start = (unsigned char far *)MK_FP(0x40, 0xfc);
-	unsigned char far       *data_end = (unsigned char far *)MK_FP(0x40, 0xfd);
-	unsigned char far *hjzb = (unsigned char far *)MK_FP(0x40, 0xfe);
-	unsigned char far       *tsr = (unsigned char far *)MK_FP(0x40, 0xff);
-	int hasdata=0;
+	int hasdata = 0;
 	int c;
 	do {
 		c = inportb(PORT1 + 5);
@@ -52,27 +46,14 @@ void interrupt PORT1INT()  /* Interrupt Service Routine (ISR) for PORT1 */
 	} while (c & 1);
 	outportb(0x20, 0x20);
 
+	/* check buffer has 88 bytes */
 	if (bufferout == bufferin)hasdata = 0;
+	else hasdata = bufferout > bufferin ? (bufferin + 1024 - bufferout >= 88) : (bufferin - bufferout >= 88);
 
-
-	if (bufferout > bufferin) /*buffer fulled*/
-	{
-		if (bufferin + 1024 - bufferout >= 88){
-			hasdata = 1;
-		}
-	}
-	else{
-		if (bufferin - bufferout >= 88){
-			hasdata = 1;
-		}
-	}
 	while (hasdata){
-		int datacount;
-		int datasize;
-		char far * londadd;
+		char far * londadd; /*lonsd data ptr*/
 		int i = 0;
 		char data[88];
-		char * data_p = &data[0];
 		char far *p;
 		for (i = 0; i < 88; i++){
 			data[i] = buffer[bufferout];
@@ -80,40 +61,30 @@ void interrupt PORT1INT()  /* Interrupt Service Routine (ISR) for PORT1 */
 			if (bufferout == 1024) { bufferout = 0; }
 		}
 
-		if (*lonsd_seg || *lonsd_pad){
-			londadd = (char far *) (MK_FP(*lonsd_seg, *lonsd_pad));
-			for (i = 0;i<88;i++){
-			p=(char far *)(londadd+*data_start*88+i);
-			*p=data[i];
+		if (*lonsd_seg || *lonsd_off){ /*lonsd started*/
+			londadd = (char far *) (MK_FP(*lonsd_seg, *lonsd_off));
+			for (i = 0; i < 88; i++){ /*copy data to lonsd data memory*/
+				p = (char far *)(londadd + *data_start * 88 + i);
+				*p = data[i];
 			}
 
 		}
-		outport(PORT1,*lonsd_seg);
+		/*outport(PORT1, *lonsd_seg);*/
 
 		(*data_start)++;
 		if (*data_start == 255) {
 			*data_start = 0;
 		}
-		outportb(PORT1, '1');
+		/*outportb(PORT1, '1');*/
 
 
 
 
 
-		/*check has data*/
-		hasdata = 0;
+		/* check buffer has 88 bytes again*/
 		if (bufferout == bufferin)hasdata = 0;
-		if (bufferout > bufferin) /*buffer reseted*/
-		{
-			if (bufferin + 1024 - bufferout >= 88){
-				hasdata = 1;
-			}
-		}
-		else{
-			if (bufferin - bufferout >= 88){
-				hasdata = 1;
-			}
-		}
+		else hasdata = bufferout > bufferin ? (bufferin + 1024 - bufferout >= 88) : (bufferin - bufferout >= 88);
+
 	}
 }
 
@@ -122,33 +93,23 @@ void interrupt PORT1INT()  /* Interrupt Service Routine (ISR) for PORT1 */
 
 void main(void)
 {
-	int c;
 
 
-	char far       *scr;
-	char far       *mode;
-	unsigned char far       *drv_type = (unsigned char far *) MK_FP(0x40, 0xf0);
-	unsigned char far       *drv_num = (unsigned char far *)MK_FP(0x40, 0xf1);
-	unsigned char far       *htype = (unsigned char far *)MK_FP(0x40, 0xf6);
-	unsigned short far * lonsd_seg = (unsigned short far *)MK_FP(0x40, 0xf8);
-	unsigned short far * lonsd_pad = (unsigned short far *)MK_FP(0x40, 0xfa);
-	unsigned char far       *data_start = (unsigned char far *)MK_FP(0x40, 0xfc);
-	unsigned char far       *data_end = (unsigned char far *)MK_FP(0x40, 0xfd);
-	unsigned char far *hjzb = (unsigned char far *)MK_FP(0x40, 0xfe);
-	unsigned char far       *tsr = (unsigned char far *)MK_FP(0x40, 0xff);
 
 	*drv_type = 1;
-	*drv_num=0x31;
+	*drv_num = '0';
+	*(drv_num + 1) = '0';
+	*(drv_num + 2) = '0';
+	*(drv_num + 3) = '0';
+	*(drv_num + 4) = '0';
 	*htype = 3;
 	*data_start = 0;
 	*data_end = 0;
 	*tsr = 0;
-
+	*lonsd_seg = 0;
+	*lonsd_off = 0;
 	*hjzb = 0xff;
 	*tsr = 0xaa;
-
-
-
 
 
 	outportb(PORT1 + 1, 0);        /* Turn off interrupts - Port1 */
@@ -186,29 +147,6 @@ void main(void)
 
 	outportb(PORT1 + 1, 0x01);  /* Interrupt when data received */
 
-	system("\\ql.bat");
+	system("\\ql.bat"); /*call lonsd here*/
 
-	/*
-	printf("\nSample Comm's Program. Press ESC to quit \n");
-
-	do {
-
-	if (bufferin != bufferout){ch = buffer[bufferout];
-	bufferout++;
-	if (bufferout == 1024) {bufferout = 0;}
-	printf("%c",ch);}
-
-	if (kbhit()){c = getch();
-	outportb(PORT1, c);}
-
-	} while (c !=27);
-
-	outportb(PORT1 + 1 , 0);    */   /* Turn off interrupts - Port1 */
-	/*outportb(0x21,(inportb(0x21) | 0x10)); */ /* MASK IRQ using PIC */
-	/* COM1 (IRQ4) - 0x10  */
-	/* COM2 (IRQ3) - 0x08  */
-	/* COM3 (IRQ4) - 0x10  */
-	/* COM4 (IRQ3) - 0x08  */
-	/*setvect(INTVECT, oldport1isr);*/ /* Restore old interrupt vector */
-
-}
+}
