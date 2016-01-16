@@ -1,11 +1,4 @@
 
- /* Name       : Sample Comm's Program - 1024 Byte Buffer - buff1024.c   */
- /* Written By : Craig Peacock <cpeacock@senet.com.au>                   */
-
- /*       Copyright 1997 CRAIG PEACOCK <cpeacock@senet.com.au>           */
-
- /*         See http://www.senet.com.au/~cpeacock/serial1.htm            */
- /*                       For More Information                           */
 
 #include <dos.h>
 #include <stdio.h>
@@ -20,28 +13,34 @@
   /* COM3 0x3E8			       */
   /* COM4 0x2E8			       */
 
-int bufferin = 0;
-int bufferout = 0;
-char ch;
+
+int bufferin=0;
+int bufferout=0;
 char buffer[1025];
 
 
-char far       *scr;
-char far       *mode;
-unsigned char far       *drv_type = (unsigned char far *) 0x4000f0;
-unsigned char far       *drv_num = (unsigned char far *) 0x4000f1;
-unsigned char far       *htype = (unsigned char far *) 0x4000f6;
-unsigned char far       *data_start = (unsigned char far *) 0x4000fc;
-unsigned char far       *data_end = (unsigned char far *) 0x4000fd;
-unsigned char far       *tsr = (unsigned char far *) 0x4000ff;
-unsigned int far * lonsd_seg = (unsigned int far *) 0x4000f8;
-unsigned int far * lonsd_pad = (unsigned int far *) 0x4000fa;
-unsigned char far *hjzb = (unsigned char far *) 0x4000fe;
 
 void interrupt (*oldport1isr)();
 
 void interrupt PORT1INT()  /* Interrupt Service Routine (ISR) for PORT1 */
+
 {
+
+
+	char ch;
+
+	char far       *scr;
+	char far       *mode;
+	unsigned char far       *drv_type = (unsigned char far *) MK_FP(0x40, 0xf0);
+	unsigned char far       *drv_num = (unsigned char far *)MK_FP(0x40, 0xf1);
+	unsigned char far       *htype = (unsigned char far *)MK_FP(0x40, 0xf6);
+	unsigned short far * lonsd_seg = (unsigned short far *)MK_FP(0x40, 0xf8);
+	unsigned short far * lonsd_pad = (unsigned short far *)MK_FP(0x40, 0xfa);
+	unsigned char far       *data_start = (unsigned char far *)MK_FP(0x40, 0xfc);
+	unsigned char far       *data_end = (unsigned char far *)MK_FP(0x40, 0xfd);
+	unsigned char far *hjzb = (unsigned char far *)MK_FP(0x40, 0xfe);
+	unsigned char far       *tsr = (unsigned char far *)MK_FP(0x40, 0xff);
+	int hasdata=0;
 	int c;
 	do {
 		c = inportb(PORT1 + 5);
@@ -52,58 +51,70 @@ void interrupt PORT1INT()  /* Interrupt Service Routine (ISR) for PORT1 */
 		}
 	} while (c & 1);
 	outportb(0x20, 0x20);
-	while (hasdata()){
-		recvdata();
-	}
-}
+
+	if (bufferout == bufferin)hasdata = 0;
 
 
-int hasdata() {
-	if (bufferout==bufferin)return 0;
-	if (bufferout > bufferin) /*buffer reseted*/
+	if (bufferout > bufferin) /*buffer fulled*/
 	{
 		if (bufferin + 1024 - bufferout >= 88){
-			return 1;
+			hasdata = 1;
 		}
 	}
 	else{
 		if (bufferin - bufferout >= 88){
-			return 1;
+			hasdata = 1;
 		}
 	}
-	return 0;
+	while (hasdata){
+		int datacount;
+		int datasize;
+		char far * londadd;
+		int i = 0;
+		char data[88];
+		char * data_p = &data[0];
+		char far *p;
+		for (i = 0; i < 88; i++){
+			data[i] = buffer[bufferout];
+			bufferout++;
+			if (bufferout == 1024) { bufferout = 0; }
+		}
 
-}
-int recvdata(){
-	int datacount;
-	int datasize;
-	char far * londadd;
-	int i=0;
-	char data[88];
-	londadd =(char far *) (MK_FP(*lonsd_seg , *lonsd_pad));
-	while (i < 88){
-		data[i] = buffer[bufferout];
-		bufferout++;
-		if (bufferout == 1024) { bufferout = 0; }
-		i++;
+		if (*lonsd_seg || *lonsd_pad){
+			londadd = (char far *) (MK_FP(*lonsd_seg, *lonsd_pad));
+			for (i = 0;i<88;i++){
+			p=(char far *)(londadd+*data_start*88+i);
+			*p=data[i];
+			}
+
+		}
+		outport(PORT1,*lonsd_seg);
+
+		(*data_start)++;
+		if (*data_start == 255) {
+			*data_start = 0;
+		}
+		outportb(PORT1, '1');
+
+
+
+
+
+		/*check has data*/
+		hasdata = 0;
+		if (bufferout == bufferin)hasdata = 0;
+		if (bufferout > bufferin) /*buffer reseted*/
+		{
+			if (bufferin + 1024 - bufferout >= 88){
+				hasdata = 1;
+			}
+		}
+		else{
+			if (bufferin - bufferout >= 88){
+				hasdata = 1;
+			}
+		}
 	}
-
-	if (londadd){
-		memcpy(londadd+*data_start*88, data,88);
-		outportb(PORT1,*data_start);
-		outportb(PORT1,*data_end);
-		/*geninterrupt(0x61);*/
-	}
-	else{
-
-
-
-	}
-	*data_start++;
-	if (*data_start == 255) {
-		*data_start = 0;
-	}
-	outportb(PORT1, '1');
 }
 
 
@@ -114,21 +125,25 @@ void main(void)
 	int c;
 
 
-
+	char far       *scr;
+	char far       *mode;
+	unsigned char far       *drv_type = (unsigned char far *) MK_FP(0x40, 0xf0);
+	unsigned char far       *drv_num = (unsigned char far *)MK_FP(0x40, 0xf1);
+	unsigned char far       *htype = (unsigned char far *)MK_FP(0x40, 0xf6);
+	unsigned short far * lonsd_seg = (unsigned short far *)MK_FP(0x40, 0xf8);
+	unsigned short far * lonsd_pad = (unsigned short far *)MK_FP(0x40, 0xfa);
+	unsigned char far       *data_start = (unsigned char far *)MK_FP(0x40, 0xfc);
+	unsigned char far       *data_end = (unsigned char far *)MK_FP(0x40, 0xfd);
+	unsigned char far *hjzb = (unsigned char far *)MK_FP(0x40, 0xfe);
+	unsigned char far       *tsr = (unsigned char far *)MK_FP(0x40, 0xff);
 
 	*drv_type = 1;
-	/*
-	*drv_num="00000";*/
-	strcpy(*drv_num, "00000");
-	/*strcpy(*htype, '\x01\x00');*/
+	*drv_num=0x31;
 	*htype = 3;
 	*data_start = 0;
 	*data_end = 0;
 	*tsr = 0;
-	if ((*mode & 0x30) == 0x30)
-		scr = (char far *) 0xB0000000;
-	else
-		scr = (char far *) 0xB8000000;
+
 	*hjzb = 0xff;
 	*tsr = 0xaa;
 
@@ -170,8 +185,8 @@ void main(void)
 	/* COM4 (IRQ3) - 0xF7  */
 
 	outportb(PORT1 + 1, 0x01);  /* Interrupt when data received */
-	keep(0,4000);
 
+	system("\\ql.bat");
 
 	/*
 	printf("\nSample Comm's Program. Press ESC to quit \n");
