@@ -118,7 +118,7 @@ void updatetbl(){
 	char* ptr=(char*)filesize;
 	long i=0;
 	FILE* ostream;
-	char data;
+	char* data;
 	bioscom(0, SETTINGS, COM1);
 	printf("Checking if have new NAMETBL ...\n");
 	haveupdate=getcomchar();
@@ -136,7 +136,7 @@ void updatetbl(){
 
 			for (i=0;i<*filesize;i++)
 			{
-				data=getcomchar();
+				*data=getcomchar();
 				fwrite(data,1,1,ostream);
 				printf(".");
 
@@ -147,6 +147,7 @@ void updatetbl(){
 			printf("Cannot open file!\n");
 			exit(1);
 		}
+		fflush(ostream);
 		fclose(ostream);
 		printf("\n");
 	}
