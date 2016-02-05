@@ -117,8 +117,9 @@ void updatetbl(){
 	long* filesize=0;
 	char* ptr=(char*)filesize;
 	long i=0;
+	long writed=0;
 	FILE* ostream;
-	char* data;
+	char data=0;
 	bioscom(0, SETTINGS, COM1);
 	printf("Checking if have new NAMETBL ...\n");
 	haveupdate=getcomchar();
@@ -136,10 +137,10 @@ void updatetbl(){
 
 			for (i=0;i<*filesize;i++)
 			{
-				*data=getcomchar();
-				fwrite(data,1,1,ostream);
+				data=getcomchar();
+				fwrite(&data,1,1,ostream);
 				printf(".");
-
+				writed++;
 			}
 		}
 		else
@@ -149,7 +150,7 @@ void updatetbl(){
 		}
 		fflush(ostream);
 		fclose(ostream);
-		printf("\n");
+		printf("success write %ld bytes.\n",writed);
 	}
 	else if (haveupdate!='N'){
 		printf("Protocol ERROR!\nRECV:%d",haveupdate);
